@@ -1,16 +1,6 @@
-# Ambientes virtuais
 .venv/
 .venv-puro/
-.venv-final/
-venv/
-ENV/
-
-# Python e Cache
+.ve_Aula32_Hello/
 __pycache__/
-*.py[cod]
-*$py.class
+.streamlit/
 .ipynb_checkpoints/
-
-# Sistema operacional
-.DS_Store
-Thumbs.db
