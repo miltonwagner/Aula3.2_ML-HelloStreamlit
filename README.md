@@ -1,205 +1,236 @@
-# 🚗 Dashboard Oráculo Preditivo — Previsão de Preços de Veículos
+# 🚗 Desafio do Oráculo Preditivo — Previsão de Preços de Veículos Usados
 
-Aplicação web interativa que utiliza **Machine Learning** para estimar o valor de mercado de veículos com base em características como ano de fabricação, preço de tabela, quilometragem, tipo de combustível, tipo de vendedor, transmissão e número de proprietários anteriores.
+Projeto acadêmico da disciplina de **Aprendizagem de Máquina** — Fatec Indaiatuba Dr. Archimedes Lammoglia.
 
-Projeto acadêmico desenvolvido para a disciplina de **Aprendizagem de Máquina** — Fatec Indaiatuba Dr. Archimedes Lammoglia.
+Comparação de três modelos de regressão (Regressão Linear Múltipla, Random Forest e SVR) para prever o preço de venda de **carros usados**, com validação cruzada, análise de resíduos e um dashboard interativo em **Streamlit**.
 
----
-
-## 📋 Sumário
-
-- [Sobre o Projeto](#-sobre-o-projeto)
-- [Dataset](#-dataset)
-- [Metodologia](#-metodologia)
-- [Resultados dos Modelos](#-resultados-dos-modelos)
-- [Aplicação Web (Streamlit)](#-aplicação-web-streamlit)
-- [Estrutura do Repositório](#-estrutura-do-repositório)
-- [Como Executar](#-como-executar)
-- [Tecnologias Utilizadas](#-tecnologias-utilizadas)
-- [Conclusões](#-conclusões)
-- [Equipe](#-equipe)
-- [Referências](#-referências)
+> ⚠️ **Unidade dos preços:** os valores do dataset estão em **lakhs de rupias indianas** (1 lakh = ₹ 100.000), e não em dólar. Os dados são de aproximadamente 2018.
 
 ---
 
-## 🎯 Sobre o Projeto
+## Sumário
 
-O objetivo deste projeto é desenvolver, avaliar e comparar modelos de aprendizado de máquina supervisionado para prever o **preço de venda (Selling_Price)** de veículos usados, aplicando técnicas de engenharia de features, pré-processamento, validação e comparação entre abordagens lineares e não-lineares — culminando em uma aplicação web interativa desenvolvida em **Streamlit**.
+- [Dataset](#dataset)
+- [Metodologia](#metodologia)
+- [Resultados](#resultados)
+- [Análise do outlier (Land Cruiser)](#análise-do-outlier-land-cruiser)
+- [Veredito do grupo](#veredito-do-grupo)
+- [Limitações](#limitações)
+- [Dashboard (Streamlit)](#dashboard-streamlit)
+- [Estrutura do repositório](#estrutura-do-repositório)
+- [Como executar](#como-executar)
+- [Tecnologias](#tecnologias)
+- [Equipe](#equipe)
+- [Referências](#referências)
 
-**Variáveis preditoras utilizadas:**
+---
+
+## Dataset
+
+- **Fonte:** Car Price Prediction (CarDekho), Kaggle — arquivo `Vehicle-DS.csv`.
+- **Bruto:** 301 linhas × 9 colunas, sem valores nulos e com 2 duplicatas.
+- **Após limpeza:** 299 linhas = **198 carros + 101 motos**.
+- **Escopo dos modelos:** apenas os **198 carros**. O campo `Tipo` (carro/moto) foi criado por regex de marcas de moto; trata-se de uma heurística **não validada linha a linha**.
+- **Divisão treino/teste:** 80/20 com `random_state=42` → **158 treino / 40 teste**.
+
+**Variáveis**
 
 | Variável | Descrição |
 |---|---|
-| `Year` | Ano de fabricação do veículo |
-| `Present_Price` | Preço de tabela (novo) |
+| `Selling_Price` | Preço de venda (alvo), em lakhs |
+| `Present_Price` | Preço do modelo novo, em lakhs |
 | `Kms_Driven` | Quilometragem rodada |
-| `Fuel_Type` | Tipo de combustível |
-| `Seller_Type` | Tipo de vendedor |
-| `Transmission` | Tipo de transmissão |
 | `Owner` | Número de proprietários anteriores |
-| `Car_Age` | Idade do veículo (feature derivada) |
+| `Car_Age` | Idade do veículo (`2019 − Year`), feature derivada |
+| `Fuel_Type` | Combustível (Petrol, Diesel, CNG) |
+| `Seller_Type` | Tipo de vendedor (Dealer, Individual) |
+| `Transmission` | Transmissão (Manual, Automatic) |
+
+**Distribuição dos carros:** Seller 193 Dealer / 5 Individual; Fuel 138 Petrol / 58 Diesel / 2 CNG; Transmission 168 Manual / 30 Automatic.
+
+**`Selling_Price` (carros):** média 6,60; desvio 5,04; mediana 5,25; máximo 35,00; assimetria ≈ 2,7 (cauda longa à direita). Outliers pelo critério 1,5×IQR: 16 / 11 / 6 nas três variáveis analisadas. **Decisão: mantê-los.**
+
+**Correlação com `Selling_Price`:** `Present_Price` +0,82; `Car_Age` −0,35; `Kms_Driven` −0,11; `Owner` −0,08. Correlação entre `Kms_Driven` e `Car_Age`: +0,71. **VIF:** Present_Price 1,10; Kms_Driven 2,23; Owner 1,04; Car_Age 2,07 (sem multicolinearidade severa).
 
 ---
 
-## 📊 Dataset
+## Metodologia
 
-- **Nome:** Car Price Prediction (`Vehicle-DS.csv`)
-- **Total de registros:** 301
-- **Divisão treino/teste:** 240 registros para treino (`X_train`) e 61 para teste (`X_test`)
+**Pré-processamento (dentro de `Pipeline` / `ColumnTransformer`)**
+- Numéricas: `Present_Price`, `Kms_Driven`, `Owner`, `Car_Age`.
+- Categóricas: `Fuel_Type`, `Seller_Type`, `Transmission` com `OneHotEncoder(drop="first", handle_unknown="ignore")`.
+- `StandardScaler` apenas em **RLM** e **SVR**. O **RFR** não usa escala.
+- Outliers mantidos; por isso `StandardScaler` foi preferido ao `MinMaxScaler` (o MinMax não foi testado).
 
-**Estatísticas descritivas:**
+**Modelos**
+1. **Regressão Linear Múltipla (RLM)**: baseline interpretável.
+2. **Random Forest Regressor (RFR)**: ensemble de árvores (bagging).
+3. **Support Vector Regressor (SVR)**: kernels linear e RBF comparados; o RBF foi o escolhido pela busca.
 
-| | Selling_Price | Present_Price | Kms_Driven | Owner | Car_Age |
-|---|---|---|---|---|---|
-| count | 301 | 301 | 301 | 301 | 301 |
-| mean | 4.66 | 7.63 | 36,947.21 | 0.04 | 5.37 |
-| std | 5.08 | 8.64 | 38,886.88 | 0.25 | 2.89 |
-| min | 0.10 | 0.32 | 500 | 0 | 1 |
-| max | 35.00 | 92.60 | 500,000 | 3 | 16 |
+**Ajuste de hiperparâmetros:** `GridSearchCV` com 5 folds e `scoring` MAE, **somente nos dados de treino**.
+- RFR: `n_estimators=200`, `max_depth=None`, `min_samples_leaf=1`.
+- SVR: `kernel=rbf`, `C=300` (**maior valor da grade**, portanto o ótimo pode estar além dela), `epsilon=0,1`, `gamma=0,01`.
 
-A análise exploratória mostrou uma **assimetria à direita** na variável alvo (preço), com veículos de maior valor concentrados em uma cauda longa, e uma **forte correlação positiva (0.88)** entre `Present_Price` e `Selling_Price`, indicando ser a variável de maior peso explicativo.
-
----
-
-## 🔬 Metodologia
-
-### Pré-processamento e Engenharia de Features
-- **Variáveis categóricas:** `OneHotEncoder` (com remoção da primeira categoria para evitar multicolinearidade) aplicado em `Fuel_Type`, `Seller_Type` e `Transmission`.
-- **Escalonamento:** padronização/normalização integrada aos pipelines de dados.
-- **Divisão dos dados:** treino/teste para validação rigorosa da capacidade preditiva.
-- **Outliers:** tratados preservando a robustez estatística da regressão.
-
-### Modelos Implementados
-1. **Regressão Linear Múltipla** — baseline estatístico e interpretável.
-2. **Random Forest Regressor** — ensemble (bagging) para capturar interações não-lineares.
-3. **Support Vector Regression (SVR)** — mapeamento por hiperplanos para testar robustez preditiva.
+**Validação cruzada final:** `RepeatedKFold` 5×3 (`random_state=42`) sobre os 198 carros.
 
 ---
 
-## 📈 Resultados dos Modelos
+## Resultados
 
-| Modelo | R² | MAE (US$) | MAPE (%) | RMSE (US$) |
-|---|---|---|---|---|
-| Regressão Linear Múltipla | 0.85 | 1,250.40 | 12.4% | 1,680.20 |
-| **Random Forest Regressor** | **0.92** | **920.10** | **8.8%** | **1,210.50** |
-| Support Vector Regressor (SVR) | 0.88 | 1,110.30 | 10.5% | 1,450.00 |
+Valores em **lakhs**, obtidos na execução do notebook. Gap = R² treino − R² teste.
 
-> *Nota: valores exemplificativos calibrados com base na execução do pipeline do projeto.*
+| Modelo | R² teste | MAE | MAPE (%) | RMSE | R² treino | R² CV (±) | MAE CV | Gap |
+|---|---|---|---|---|---|---|---|---|
+| RLM | 0,799 | 1,395 | 24,470 | 2,605 | 0,884 | 0,823 ± 0,043 | 1,360 | 0,085 |
+| RFR | 0,790 | 1,122 | 16,081 | 2,663 | 0,991 | 0,869 ± 0,066 | 0,940 | 0,202 |
+| SVR | 0,587 | 1,309 | 16,971 | 3,733 | 0,974 | 0,842 ± 0,150 | 0,918 | 0,387 |
 
-**Random Forest Regressor** apresentou a melhor performance global, por capturar relações não-lineares e interações complexas entre variáveis (como desvalorização em função de quilometragem e ano) que a Regressão Linear, por ser estritamente linear, tende a suavizar ou ignorar.
+**Leitura dos resultados**
+- No **teste**, a RLM tem o maior R² e o menor RMSE, enquanto o RFR tem o menor MAE e o menor MAPE.
+- Na **validação cruzada**, o RFR tem o maior R² e os três modelos ficam próximos em MAE; o SVR é o mais instável (± 0,150).
+- O **gap** cresce da RLM para o RFR e o SVR, o que indica mais sobreajuste nos dois últimos.
 
-A análise de resíduos indicou erros **predominantemente aleatórios**, distribuídos em torno da linha zero, sem padrões sistemáticos — evidenciando ausência de vieses graves e boa generalização, sem sinais severos de overfitting.
+**Coeficientes da RLM** (intercepto 6,324): Present_Price +3,757; Car_Age −1,182; Kms_Driven −1,158; Owner −0,418; Transmission_Manual −0,637; Fuel_Petrol +0,295; Fuel_Diesel +2,088; Seller_Individual +2,075.
+Os coeficientes de combustível são relativos à categoria CNG (apenas 2 carros) e o de Seller_Individual se apoia em 5 carros; **não devem ser interpretados** como efeito causal.
 
----
-
-## 🖥️ Aplicação Web (Streamlit)
-
-Todo o fluxo analítico e preditivo foi encapsulado em uma aplicação interativa (`app-Aula32.py`), com painel dividido em abas:
-
-- **📁 Visão Geral dos Dados** — exploração do dataset bruto em tempo real.
-- **📊 Análise Exploratória & Gráficos** — visualizações interativas geradas via Plotly (distribuição de preços, matriz de correlação, gráficos de resíduos e Valores Reais vs. Preditos).
-- **🎯 Simulador de Predição** — barra lateral com parâmetros ajustáveis (ano, quilometragem, preço de tabela, combustível, vendedor, transmissão) para estimativa instantânea do valor de mercado do veículo.
+**Importância no RFR:** Present_Price 0,799; Car_Age 0,144; Kms_Driven 0,050; demais ≈ 0.
 
 ---
 
-## 📁 Estrutura do Repositório
+## Análise do outlier (Land Cruiser)
+
+Um Land Cruiser 2010 no conjunto de teste (preço real 35,0; `Present_Price` 92,6) domina o erro quadrático:
+
+| Modelo | Previsão (real = 35,0) | % do erro quadrático total |
+|---|---|---|
+| RLM | 48,96 | 71,8% |
+| RFR | 19,60 | 83,5% |
+| SVR | 12,11 | 94,0% |
+
+**Métricas sem esse carro (39 linhas de teste):**
+
+| Modelo | R² | MAE | RMSE |
+|---|---|---|---|
+| RLM | 0,849 | 1,073 | 1,402 |
+| RFR | 0,908 | 0,756 | 1,095 |
+| SVR | 0,934 | 0,756 | 0,925 |
+
+O **ranking de R² se inverte** sem esse carro: o resultado do teste depende fortemente de uma única observação. A menor previsão da RLM foi −0,17 (preço negativo, impossível), consequência de a regressão linear não ter limite inferior.
+
+---
+
+## Veredito do grupo
+
+**Não há vencedor absoluto.** A escolha depende do critério:
+
+- **RFR** — apoio à precificação: menor MAE e MAPE no teste, melhor R² em validação cruzada.
+- **RLM** — baseline explicativo: mais simples, interpretável e com o menor gap.
+- **SVR** — **descartado**: pior R² no teste, maior gap e maior instabilidade entre dobras.
+
+---
+
+## Limitações
+
+- **Poucos dados:** 198 carros (40 no teste), com categorias muito desbalanceadas (CNG: 2; Individual: 5).
+- **Teste sensível a outlier:** ver seção do Land Cruiser.
+- **Validação cruzada levemente otimista:** as 40 linhas de teste participam das dobras do `RepeatedKFold`.
+- **Cauda alta:** os resíduos indicam padrão na faixa de preços altos; os modelos não capturaram toda a informação ali.
+- **SVR:** `C=300` está no limite da grade de busca.
+- **Heurística carro/moto** não validada linha a linha.
+- **Custo de predição não foi medido** (tempo de inferência de RLM, RFR e SVR).
+- **Conversão monetária:** os preços são nominais, de ~2018. Qualquer conversão para R$ ou US$ usa câmbio **aproximado e não confirmado** e serve só como ordem de grandeza.
+
+---
+
+## Dashboard (Streamlit)
+
+O arquivo `app-Aula32.py` reúne, em abas: exploração dos dados, gráficos (distribuição de preços, correlação, resíduos, reais × preditos), tabela comparativa dos modelos com validação cruzada 5×3, MAPE e gap, sensibilidade do Land Cruiser, coeficientes da RLM, importância do RFR e simulador de predição.
+
+---
+
+## Estrutura do repositório
+
+> **[CONFIRMAR]** Ajustar com a listagem real da raiz do projeto antes do commit.
 
 ```
 Aula3.2_ML-HelloStreamlit/
-│
-├── app-Aula32.py              # Aplicação principal Streamlit (dashboard)
-├── Vehicle-DS.csv             # Dataset utilizado (Car Price Prediction)
-├── requirements.txt           # Dependências do projeto
-├── README.md                  # Este arquivo
-├── README.txt                 # Instruções rápidas de instalação para o cliente
-└── Relatorio_Machine_Learn.pdf # Relatório técnico completo do projeto
+├── app-Aula32.py                  # Dashboard Streamlit
+├── Vehicle-DS.csv                 # Dataset
+├── requirements.txt               # Dependências
+├── README.md                      # Este arquivo
+├── README.txt                     # Instruções rápidas para o cliente
+├── Relatorio_Machine_Learn.pdf    # Relatório técnico  [CONFIRMAR nome atual]
+├── <notebook>.ipynb               # Notebook de análise  [CONFIRMAR nome]
+└── Entrega_Cliente/               # Pacote de entrega  [CONFIRMAR conteúdo]
 ```
 
 ---
 
-## ⚙️ Como Executar
+## Como executar
 
-### Pré-requisitos
-- Python 3.x instalado
-- Git instalado
+**Pré-requisitos:** Python 3.x e Git.
 
-### Passo a passo
-
-1. **Clone o repositório**
+1. Clone o repositório:
    ```bash
    git clone https://github.com/miltonwagner/Aula3.2_ML-HelloStreamlit.git
    cd Aula3.2_ML-HelloStreamlit
    ```
 
-2. **Crie o ambiente virtual**
+2. Crie o ambiente virtual:
    ```bash
-   python -m venv .ve_Aula32_Hello
+   python -m venv .venv-puro
    ```
 
-3. **Ative o ambiente virtual**
+3. Ative o ambiente.
 
-   No Windows:
+   Windows (PowerShell):
+   ```powershell
+   Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
+   .\.venv-puro\Scripts\Activate.ps1
+   ```
+   Linux/macOS:
    ```bash
-   .ve_Aula32_Hello\Scripts\activate
+   source .venv-puro/bin/activate
    ```
 
-   No Linux/macOS:
-   ```bash
-   source .ve_Aula32_Hello/bin/activate
-   ```
-
-4. **Instale as dependências**
+4. Instale as dependências:
    ```bash
    pip install -r requirements.txt
    ```
 
-5. **Execute o dashboard**
+5. Execute o dashboard (a partir da raiz do projeto):
    ```bash
    streamlit run app-Aula32.py
    ```
 
-6. Acesse a aplicação em `http://localhost:8501` no navegador.
+6. Abra `http://localhost:8501` no navegador.
 
 ---
 
-## 🛠️ Tecnologias Utilizadas
+## Tecnologias
 
-- **Python 3**
-- **Streamlit** — aplicação web interativa
-- **Pandas** — manipulação e análise de dados
-- **Scikit-Learn** — pipelines de pré-processamento e modelos supervisionados (Regressão Linear, Random Forest, SVR)
-- **Plotly Express** — visualização de dados interativa
+Python 3 · Streamlit · Pandas · NumPy · Scikit-Learn (Pipeline, ColumnTransformer, RLM, Random Forest, SVR, GridSearchCV, RepeatedKFold) · Plotly / Matplotlib *(confirmar quais bibliotecas o app usa)*
 
 ---
 
-## 🧾 Conclusões
-
-- O **Random Forest Regressor** obteve a melhor performance global (maior R², menor RMSE/MAE), sendo a escolha ideal quando a **precisão** é prioridade (ex: precificação dinâmica de estoque).
-- A **Regressão Linear Múltipla** segue relevante em cenários que exigem **alta interpretabilidade**, como auditorias e explicações diretas à diretoria sobre o peso de cada variável no preço final.
-- Não foram observados sinais severos de overfitting, graças à divisão adequada treino/teste e à estruturação de pipelines de pré-processamento.
-- O pipeline final buscou o equilíbrio entre **precisão** e **interpretabilidade**, adequado ao uso prático em um produto de software real.
-
----
-
-## 👥 Equipe
+## Equipe
 
 - Gustavo Molina
 - João Emanoel
 - Milton Wagner
 - Murilo
 
-**Instituição:** Faculdade de Tecnologia de Indaiatuba Dr. Archimedes Lammoglia (Fatec Indaiatuba) — Indaiatuba, 2026
+**Instituição:** Faculdade de Tecnologia de Indaiatuba Dr. Archimedes Lammoglia (Fatec Indaiatuba) — Indaiatuba, 2026.
 
 ---
 
-## 📚 Referências
+## Referências
 
-- Material didático da disciplina de Aprendizagem de Máquina — Fatec.
-- Pandas & Plotly Express Documentation — Data Manipulation and Interactive Data Visualization.
-- Scikit-Learn Documentation — Supervised Learning Pipelines, ColumnTransformer, and Linear Models.
+- Dataset: Car Price Prediction (CarDekho), Kaggle — *[colar o link do PDF do professor]*.
+- Material didático da disciplina de Aprendizagem de Máquina — Fatec Indaiatuba.
+- Documentação do Scikit-Learn: Pipeline, ColumnTransformer, modelos lineares, Random Forest e SVR.
+- Documentação do Streamlit, Pandas e Plotly.
 
 ---
 
-## 🔗 Link do Repositório
-
-[github.com/miltonwagner/Aula3.2_ML-HelloStreamlit](https://github.com/miltonwagner/Aula3.2_ML-HelloStreamlit.git)
+🔗 [github.com/miltonwagner/Aula3.2_ML-HelloStreamlit](https://github.com/miltonwagner/Aula3.2_ML-HelloStreamlit)
