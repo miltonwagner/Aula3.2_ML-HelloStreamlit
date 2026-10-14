@@ -215,10 +215,10 @@ Python 3 · Streamlit · Pandas · NumPy · Scikit-Learn (Pipeline, ColumnTransf
 
 ## Equipe
 
-- Gustavo Molina
+- Gustavo L. Molina
 - João Emanoel
 - Milton Wagner
-- Murilo
+- Murilo Sobral
 
 **Instituição:** Faculdade de Tecnologia de Indaiatuba Dr. Archimedes Lammoglia (Fatec Indaiatuba) — Indaiatuba, 2026.
 
